@@ -1,0 +1,152 @@
+resource "aws_backup_vault" "source-backup-vault" {
+    name = "source-backup-vault-name"
+    kms_key_arn = aws_kms_key.source-samplekms.arn
+}
+
+resource "aws_backup_vault" "dest-backup-vault" {
+    provider = aws.crossbackup
+    name = "dest-backup-vault-name"
+    kms_key_arn = aws_kms_key.dest-samplekms.arn
+}
+
+resource "aws_kms_key" "source-samplekms" {
+    enable_key_rotation = true
+    deletion_window_in_days = 10
+
+    policy = <<POLICY
+
+{
+    "Id": "key-consolepolicy-3",
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Enable IAM User Permissions",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::516846794269:root"
+            },
+            "Action": "kms:*",
+            "Resource": "*"
+        },
+        {
+            "Sid": "Allow use of the key",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::750084109068:root"
+            },
+            "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "Allow attachment of persistent resources",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::750084109068:root"
+            },
+            "Action": [
+                "kms:CreateGrant",
+                "kms:ListGrants",
+                "kms:RevokeGrant"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "Bool": {
+                    "kms:GrantIsForAWSResource": "true"
+                }
+            }
+        }
+    ]
+}
+POLICY
+}
+
+resource "aws_kms_key" "dest-samplekms" {
+    enable_key_rotation = true
+    provider = aws.crossbackup
+
+    policy = <<POLICY
+{
+    "Id": "key-consolepolicy-3",
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Enable IAM User Permissions",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::750084109068:root"
+            },
+            "Action": "kms:*",
+            "Resource": "*"
+        },
+        {
+            "Sid": "Allow use of the key",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::516846794269:root"
+            },
+            "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "Allow attachment of persistent resources",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::516846794269:root"
+            },
+            "Action": [
+                "kms:CreateGrant",
+                "kms:ListGrants",
+                "kms:RevokeGrant"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "Bool": {
+                    "kms:GrantIsForAWSResource": "true"
+                }
+            }
+        }
+    ]
+}
+POLICY
+}
+
+resource "aws_backup_plan" "backup-plan" {
+    name = "jd-backup-plan-name"
+    rule {
+        rule_name = "jd.backup-plan-rule-name"
+        target_vault_name = aws_backup_vault.source-backup-vault.name
+        schedule = "cron(0 23-02 * * ? *)"
+        completion_window = 120
+        recovery_point_tags = {
+			Solution-ID = "my-test-backup"
+        }
+        copy_action {
+           # destination_vault_arn = aws_backup_vault.backup-vault.arn     # If using on same account 
+            destination_vault_arn = aws_backup_vault.dest-backup-vault.arn #if using different account
+        }
+    }
+}
+
+resource "aws_backup_selection" "selection-by-tag" {
+    name = "backup-selection-name"
+    iam_role_arn = aws_iam_role.aws-backup-service-role.arn
+    plan_id = aws_backup_plan.backup-plan.id
+
+    selection_tag {
+        type = "STRINGEQUALS"
+        key = "Solution-ID"
+        value = "my-test-backup"
+    }
+}
