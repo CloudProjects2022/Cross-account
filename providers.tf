@@ -3,25 +3,19 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 4.21.0"
-      configuration_aliases = [aws.crossbackup, aws.replication]
+      configuration_aliases = [aws.crossbackup]
     }
   }
   required_version = ">=0.15.5"
 }
 
 provider "aws" {
-    region = "us-east-1"
-    profile = "myown"
+  region = "us-east-2"
+  profile = "dev"
 }
 
-# provider "aws" {
-#     region = "ca-central-1"
-#     alias = "crossbackup"
-#     profile = "prod"
-# }
-
-# provider "aws" {
-#     region = "us-west-1"
-#     alias = "replication"
-#     profile = "dev"
-# }
+provider "aws" {
+  region = "us-east-2"
+  alias = "crossbackup"
+  profile = "prod"
+}
